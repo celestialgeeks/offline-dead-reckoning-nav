@@ -216,7 +216,7 @@ export default function UserMenuModal({
               <Text style={styles.menuIcon}>⚡</Text>
               <View style={styles.menuTextCol}>
                 <Text style={styles.menuTitle}>GNSS & DR Diagnostics</Text>
-                <Text style={styles.menuSubtitle}>Simulate tunnel outage & inspect IMU</Text>
+                <Text style={styles.menuSubtitle}>Simulate satellite cutoff & inspect IMU</Text>
               </View>
               <Text style={styles.arrow}>➔</Text>
             </TouchableOpacity>

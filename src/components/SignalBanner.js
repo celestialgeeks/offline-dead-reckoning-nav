@@ -1,7 +1,7 @@
 // PS168 — Signal Banner (Layer 2)
-// Slim top-center pill announcing GNSS degradation / restoration during a run:
-//   degraded — amber "⚠ GNSS Signal Degraded — Dead Reckoning active"
-//   restored — green "✓ GNSS Restored — lock re-acquired"
+// Slim top-center pill announcing satellite cutoff / restoration during a run:
+//   degraded — amber "📡 Satellite Lost — Dead Reckoning ON"
+//   restored — green "✓ Satellite Back — Position Locked"
 // Slides down + fades in on mode change; parent unmounts via mode null.
 
 import React, { useEffect, useRef } from 'react';
@@ -11,7 +11,7 @@ import { RADIUS, SHADOW } from '../utils/theme';
 
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44;
 
-export default function SignalBanner({ mode = null }) {
+export default function SignalBanner({ mode = null, containerStyle }) {
   const enterAnim = useRef(new Animated.Value(0)).current;
 
   // Slide-down + fade-in on every mode change
@@ -30,8 +30,8 @@ export default function SignalBanner({ mode = null }) {
 
   const degraded = mode === 'degraded';
   const label = degraded
-    ? '⚠ GNSS Signal Degraded — Dead Reckoning active'
-    : '✓ GNSS Restored — lock re-acquired';
+    ? '📡 Satellite Lost — Dead Reckoning ON'
+    : '✓ Satellite Back — Position Locked';
 
   return (
     <Animated.View
@@ -39,6 +39,7 @@ export default function SignalBanner({ mode = null }) {
       style={[
         styles.banner,
         degraded ? styles.bannerDegraded : styles.bannerRestored,
+        containerStyle,
         {
           opacity: enterAnim,
           transform: [

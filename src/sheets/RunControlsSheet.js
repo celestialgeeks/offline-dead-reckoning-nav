@@ -2,7 +2,7 @@
 // Replay file picker, Replay/Live toggle, START button
 // 15-second auto-calibrate countdown with circular progress
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
 import { CALIBRATION_DURATION_S } from '../utils/constants';
@@ -24,6 +24,25 @@ export default function RunControlsSheet({
 
   const snapPoints = useMemo(() => ['12%', '45%'], []);
 
+  // Open expanded (45%) so ▶ START is immediately visible — no drag needed.
+  // `index={1}` handles the declarative case; the nudge + settle fallback
+  // cover the conditional-mount path where the library's mount animation
+  // lands on (or stays at) the 12% peek.
+  useEffect(() => {
+    const t = setTimeout(() => sheetRef.current?.expand(), 350);
+    return () => clearTimeout(t);
+  }, [sheetRef]);
+  const didAutoExpandRef = useRef(false);
+  const handleSettle = useCallback(
+    (index) => {
+      if (!didAutoExpandRef.current) {
+        didAutoExpandRef.current = true;
+        if (index === 0) sheetRef.current?.snapToIndex(1);
+      }
+    },
+    [sheetRef]
+  );
+
   const handleStart = useCallback(() => {
     if (mode === 'replay' && replays.length > 0) {
       onStart(replays[selectedReplay].module, 'replay');
@@ -36,7 +55,9 @@ export default function RunControlsSheet({
     <BottomSheet
       ref={sheetRef}
       snapPoints={snapPoints}
-      index={0}
+      index={1}
+      animateOnMount={true}
+      onSettle={handleSettle}
       backgroundStyle={styles.sheetBg}
       handleIndicatorStyle={styles.handleIndicator}
       enablePanDownToClose={false}

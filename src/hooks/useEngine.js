@@ -413,6 +413,70 @@ export default function useEngine() {
   }, []);
 
   /**
+   * Fully tear down the current session and return to a clean idle home.
+   * Unlike stopRun (which freezes results for review), this clears every piece
+   * of run/overlay state — used when the user backs out of the simulation.
+   * Safe to call from any state (idle, calibrating, running, completed).
+   */
+  const resetSession = useCallback(() => {
+    // Stop the tick loop and any in-flight calibration countdown.
+    isRunningRef.current = false;
+    setIsRunning(false);
+    if (tickIntervalRef.current) {
+      clearInterval(tickIntervalRef.current);
+      tickIntervalRef.current = null;
+    }
+    if (calibIntervalRef.current) {
+      clearInterval(calibIntervalRef.current);
+      calibIntervalRef.current = null;
+    }
+    pendingRef.current = null;
+    setIsCalibrating(false);
+    setCalibrateCountdown(0);
+    if (clearedTimerRef.current) {
+      clearTimeout(clearedTimerRef.current);
+      clearedTimerRef.current = null;
+    }
+
+    // Clear all demo/HUD overlay state.
+    setFrozenResults(null);
+    setSessionSaved(false);
+    setBenchmarkSnapshot(null);
+    setTunnelCleared(false);
+    setNavInfo(null);
+    setReplayMeta(null);
+    setTrail([]);
+    setDrSeconds(0);
+    setDriftStats({ driftMeters: 0, totalMeters: 0, driftPercent: 0, pass: true });
+    setEngineState({
+      lat: null,
+      lon: null,
+      heading: 0,
+      speed: 0,
+      sigma: ENGINE.SIGMA_MIN,
+      source: 'gnss',
+    });
+
+    // Reset benchmark scoring refs so the next run starts clean.
+    metaRef.current = null;
+    replayDataRef.current = null;
+    replayIndexRef.current = 0;
+    trailRef.current = [];
+    traveledRef.current = 0;
+    prevRefRef.current = null;
+    peakRef.current = { m: 0, atS: 0 };
+    curveRef.current = [];
+    drTicksRef.current = 0;
+    blackoutRef.current = 0;
+    recoveredRef.current = false;
+    curveClosedRef.current = false;
+    totalAtRecRef.current = 0;
+    prevSourceRef.current = 'gnss';
+    speedSumRef.current = 0;
+    tickCountRef.current = 0;
+  }, []);
+
+  /**
    * Simulate outage (debug menu only)
    */
   const simulateOutageStart = useCallback(() => {
@@ -470,6 +534,7 @@ export default function useEngine() {
     startCalibration,
     skipCalibration: launchPending,
     stopRun,
+    resetSession,
 
     // Debug
     simulatedOutage,

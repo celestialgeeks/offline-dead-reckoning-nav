@@ -101,7 +101,7 @@ function DriftCurveChart({ curve, peak, blackoutS, width = 320, height = 120, sh
         {showLabels && (
           <>
             <SvgText x={padding.left} y={height - 6} fontSize={8.5} fill="#9CA3AF">
-              0s (Tunnel In)
+              0s (Signal Lost)
             </SvgText>
             <SvgText x={padding.left + plotW / 2} y={height - 6} fontSize={8.5} fill="#9CA3AF" textAnchor="middle">
               {Math.round(bo / 2)}s

@@ -122,7 +122,7 @@ export default function ResultsSheet({ visible, frozenResults, onClose, onReplay
               </View>
               <View style={styles.headerText}>
                 <Text style={styles.title}>Dead-Reckoning Benchmark</Text>
-                <Text style={styles.subtitle}>GNSS Tunnel Blackout Simulation</Text>
+                <Text style={styles.subtitle}>Satellite Cutoff → Automatic Dead-Reckoning</Text>
               </View>
               <TouchableOpacity
                 style={styles.closeBtn}
@@ -175,7 +175,7 @@ export default function ResultsSheet({ visible, frozenResults, onClose, onReplay
             {/* Stat grid */}
             <View style={styles.statGrid}>
               <View style={styles.statCell}>
-                <Text style={styles.statLabel}>🕐 Blackout Duration</Text>
+                <Text style={styles.statLabel}>🕐 Signal Cutoff</Text>
                 <View style={styles.statValueRow}>
                   <Text style={styles.statValue}>{blackoutS}</Text>
                   <Text style={styles.statUnit}>sec</Text>

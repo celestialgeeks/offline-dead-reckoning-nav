@@ -96,30 +96,45 @@ export default function SearchModal({
   const searchTimeoutRef = useRef(null);
   const seqRef = useRef(0);
 
-  // Auto focus input on open and load initial nearby places / saved places
+  // Latest props without forcing the init effect to re-run. `userLocation` is a
+  // fresh object reference on every GPS fix (~1s), so it must NOT be a
+  // dependency of the open effect or it would wipe the query and reset the
+  // list to defaults while the user is mid-typing.
+  const latestRef = useRef({ userLocation, bounds });
+  latestRef.current = { userLocation, bounds };
+
+  // Auto focus input on open and load initial nearby places / saved places.
+  // Runs once per open (not on every location update) so typing isn't clobbered.
   useEffect(() => {
-    if (visible) {
-      setQuery('');
-      setLoading(true);
+    if (!visible) return undefined;
 
-      buildDefaultResults().then(async (defaults) => {
-        if (defaults.length > 0) {
-          setResults(defaults);
-          setLoading(false);
-        } else {
-          try {
-            const res = await searchPlaces('', userLocation, 8, bounds);
-            setResults(res);
-          } catch (e) { /* aborted or offline — keep empty */ }
-          setLoading(false);
-        }
-      });
+    // Drop any pending debounced search from a previous session and invalidate
+    // in-flight results so a late response can't overwrite the fresh list.
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    ++seqRef.current;
 
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 150);
-    }
-  }, [visible, userLocation]);
+    setQuery('');
+    setLoading(true);
+
+    buildDefaultResults().then(async (defaults) => {
+      if (defaults.length > 0) {
+        setResults(defaults);
+        setLoading(false);
+      } else {
+        try {
+          const { userLocation: ul, bounds: b } = latestRef.current;
+          const res = await searchPlaces('', ul, 8, b);
+          setResults(res);
+        } catch (e) { /* aborted or offline — keep empty */ }
+        setLoading(false);
+      }
+    });
+
+    const focusTimer = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 150);
+    return () => clearTimeout(focusTimer);
+  }, [visible]);
 
   // Handle live debounced search
   const handleQueryChange = useCallback(

@@ -86,7 +86,7 @@ export default function SettingsModal({
           >
             <View style={styles.textCol}>
               <Text style={styles.rowTitle}>Dead Reckoning Demo</Text>
-              <Text style={styles.rowSubtitle}>Run a simulated GNSS tunnel-outage test</Text>
+              <Text style={styles.rowSubtitle}>Run a simulated satellite-cutoff test</Text>
             </View>
             <Text style={styles.rowChevron}>›</Text>
           </TouchableOpacity>
@@ -142,7 +142,7 @@ export default function SettingsModal({
           </View>
           <View style={styles.faqRow}>
             <Text style={styles.faqQ}>Q: How accurate is the dead-reckoning?</Text>
-            <Text style={styles.faqA}>A: It provides up to 90% accuracy in short tunnels using device sensors (accelerometer, gyroscope).</Text>
+            <Text style={styles.faqA}>A: Whenever the satellite signal cuts out, the feature switches on automatically and keeps navigating using device sensors (accelerometer, gyroscope) for up to 90% accuracy over short outages.</Text>
           </View>
           <View style={styles.faqRow}>
             <Text style={styles.faqQ}>Q: Are my searches private?</Text>

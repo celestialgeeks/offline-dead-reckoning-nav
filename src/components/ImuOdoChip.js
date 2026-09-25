@@ -9,7 +9,7 @@ import { RADIUS, SHADOW } from '../utils/theme';
 
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44;
 
-export default function ImuOdoChip({ speed = 0, visible = true }) {
+export default function ImuOdoChip({ speed = 0, visible = true, containerStyle }) {
   const enterAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
@@ -44,6 +44,7 @@ export default function ImuOdoChip({ speed = 0, visible = true }) {
     <Animated.View
       style={[
         styles.chip,
+        containerStyle,
         {
           opacity: enterAnim,
           transform: [{ scale: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }],

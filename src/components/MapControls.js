@@ -64,7 +64,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     bottom: 120,
-    zIndex: 10,
+    // Must out-rank every floating overlay (BottomBar 15, HUD stack 19,
+    // status rail 20, engine chips) so the zoom buttons stay tappable and
+    // visible in idle, running and navigation states.
+    zIndex: 100,
+    elevation: 100,
     alignItems: 'center',
     gap: 12,
   },

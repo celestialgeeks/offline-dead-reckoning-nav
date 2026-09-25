@@ -39,7 +39,7 @@ function StepDistance({ value }) {
     });
     animation.start();
     return () => {
-      animRef.removeListeners(id);
+      animRef.removeListener(id);
       animation.stop();
     };
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps

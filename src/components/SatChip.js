@@ -10,7 +10,7 @@ import { RADIUS, SHADOW } from '../utils/theme';
 
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44;
 
-export default function SatChip({ sats = 0, hdop = 0, row = 2, visible = true }) {
+export default function SatChip({ sats = 0, hdop = 0, row = 2, visible = true, containerStyle }) {
   const enterAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -37,6 +37,7 @@ export default function SatChip({ sats = 0, hdop = 0, row = 2, visible = true })
       style={[
         styles.wrap,
         row === 1 ? styles.wrapRow1 : styles.wrapRow2,
+        containerStyle,
         {
           opacity: enterAnim,
           transform: [{ scale: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }],

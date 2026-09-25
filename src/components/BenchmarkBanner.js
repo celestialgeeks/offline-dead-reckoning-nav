@@ -10,7 +10,7 @@ import { RADIUS } from '../utils/theme';
 
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44;
 
-export default function BenchmarkBanner({ snapshot, visible = true }) {
+export default function BenchmarkBanner({ snapshot, visible = true, containerStyle }) {
   const enterAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -35,6 +35,7 @@ export default function BenchmarkBanner({ snapshot, visible = true }) {
       pointerEvents="none"
       style={[
         styles.banner,
+        containerStyle,
         {
           opacity: enterAnim,
           transform: [

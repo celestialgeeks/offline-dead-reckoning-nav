@@ -10,7 +10,7 @@ import { COLORS as T, RADIUS, SHADOW } from '../utils/theme';
 
 const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44;
 
-export default function DriftMeter({ driftStats, visible = true }) {
+export default function DriftMeter({ driftStats, visible = true, containerStyle }) {
   const enterAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -36,6 +36,9 @@ export default function DriftMeter({ driftStats, visible = true }) {
     <Animated.View
       style={[
         styles.container,
+        // When placed inside the MapScreen HUD stack, the parent owns vertical
+        // placement — this neutralises the standalone absolute positioning.
+        containerStyle,
         {
           opacity: enterAnim,
           transform: [

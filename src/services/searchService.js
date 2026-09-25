@@ -124,9 +124,12 @@ const nominatimProvider = {
   id: 'nominatim',
   async autocomplete(q, { lat, lon, bounds, limit, signal }) {
     await nominatimSlot();
-    // viewbox = left,top,right,bottom (lon,lat,lon,lat)
+    // viewbox = left,top,right,bottom (lon,lat,lon,lat). Bias toward the visible
+    // area but DON'T set bounded=1 — a hard clip makes the last-resort provider
+    // return nothing when the user searches for something off-screen, so we keep
+    // it as a soft preference and still allow global matches.
     const vb = bounds && bounds.length === 4
-      ? `&viewbox=${bounds[0]},${bounds[3]},${bounds[2]},${bounds[1]}&bounded=1`
+      ? `&viewbox=${bounds[0]},${bounds[3]},${bounds[2]},${bounds[1]}`
       : '';
     const url = `${NOMINATIM_API}search?format=jsonv2&limit=${Math.min(limit, 40)}&q=${encodeURIComponent(q)}${vb}`;
     const response = await fetch(url, { signal, headers: { Accept: 'application/json', 'User-Agent': NOMINATIM_UA } });
@@ -358,10 +361,21 @@ export async function searchPlaces(query, userLocation = null, limit = 8, bounds
         console.warn(`[searchService] ${provider.id} failed:`, e?.message);
       }
     }
+    // The provider walk ended without a live result. If it was cancelled because
+    // a newer query superseded this one, honor the documented contract and bail
+    // with `.aborted` — otherwise a stale local-only fallback would surface as if
+    // it were the real answer and could clobber the newer query in the UI. On a
+    // genuine 8s timeout (this session is still active) falling back is correct.
+    if (session.signal.aborted && activeSession !== session) {
+      const err = new Error('SEARCH_SUPERSEDED');
+      err.aborted = true;
+      throw err;
+    }
     const cached = cacheGet(key);
     if (cached) return cached;
     return getLocalSuggestions(cleanQuery, userLocation, limit);
   } catch (e) {
+    if (e?.aborted) throw e; // re-throw our own SEARCH_SUPERSEDED untouched
     if (isAbort(e) && activeSession !== session) {
       // Superseded by a newer query — tell the caller to ignore this result
       const err = new Error('SEARCH_SUPERSEDED');

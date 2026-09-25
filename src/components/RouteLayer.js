@@ -51,7 +51,7 @@ export default function RouteLayer({
     });
     animation.start();
     return () => {
-      anim.removeListeners(listenerId);
+      anim.removeListener(listenerId);
       animation.stop();
     };
   }, [routeCoordinates]);

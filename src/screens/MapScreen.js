@@ -8,7 +8,18 @@
 // Layer 2: Real-time Dead-Reckoning Engine (VehicleDot, Ellipse, Trail, HUD badges)
 
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { View, StyleSheet, StatusBar, Alert, TouchableOpacity, Text } from 'react-native';
+import {
+  View,
+  StyleSheet,
+  StatusBar,
+  Alert,
+  TouchableOpacity,
+  Text,
+  BackHandler,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+} from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Layer 0
@@ -58,9 +69,39 @@ import { loadBundledReplay } from '../data/replayLoader';
 import ImuOdoChip from '../components/ImuOdoChip';
 import DemoRouteLayer from '../components/DemoRouteLayer';
 import TunnelGates from '../components/TunnelGates';
-import TunnelBanner from '../components/TunnelBanner';
 import BenchmarkBanner from '../components/BenchmarkBanner';
 import SignalBanner from '../components/SignalBanner';
+
+// ── HUD layout constants ───────────────────────────────────────────────────
+// The top-of-screen demo overlays (signal banner, drift meter, sat/IMU chips,
+// benchmark banner) used to each hard-code their own `top`, so when several
+// became active at once they stacked on top of one another. They now live in a
+// single flex column (styles.hudStack) that starts just below the search pill
+// and lays each active overlay out on its own row — no overlap by construction.
+const STATUS_BAR_HEIGHT = Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 44;
+const HUD_STACK_TOP = STATUS_BAR_HEIGHT + 64;
+
+// Overlay components render `position:'absolute'` standalone; inside the stack
+// the parent owns vertical placement, so we neutralise their own offsets.
+const STACK_ITEM = {
+  position: 'relative',
+  top: 'auto',
+  left: 'auto',
+  right: 'auto',
+  alignSelf: 'auto',
+  // NOTE: 'auto' is not a valid zIndex in the New Architecture (native casts it
+  // to Double and throws "String cannot be cast to Double"). 0 neutralises each
+  // child's own absolute zIndex so siblings stack in mount order instead.
+  zIndex: 0,
+};
+// Benchmark banner is full-width: stretch it across the stack instead of centring.
+const STACK_ITEM_STRETCH = { ...STACK_ITEM, alignSelf: 'stretch', minWidth: 0 };
+
+// Android needs the experimental flag flipped before LayoutAnimation runs —
+// this is what smoothly pushes the lower overlays down as new ones appear.
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function MapScreen() {
   // Refs
@@ -75,7 +116,9 @@ export default function MapScreen() {
   const [trackingMode, setTrackingMode] = useState('follow');
 
   // Layer 1: Places & Amenities
-  const [selectedCategory, setSelectedCategory] = useState('hospital');
+  // No category pre-selected: chips start unselected and the user must tap
+  // one to filter. Viewport fetches fall back to 'all' (see `|| 'all'` below).
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [places, setPlaces] = useState([]);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [showSearchAreaBtn, setShowSearchAreaBtn] = useState(false);
@@ -164,6 +207,7 @@ export default function MapScreen() {
     startCalibration,
     skipCalibration,
     stopRun,
+    resetSession,
     simulatedOutage,
     simulateOutageStart,
     simulateOutageEnd,
@@ -571,6 +615,85 @@ export default function MapScreen() {
     mapRef.current?.flyTo(target, 16, 0, 0, 600);
   }, [isRunning, engineState, position]);
 
+  // ── Android hardware back button: two-step confirmation ──────────────────
+  // The app is a single screen (no navigation stack), so back is handled here
+  // via BackHandler rather than React Navigation. An active DR "simulation"
+  // (running / calibrating / reviewing frozen results) never exits the app on
+  // the first press — it asks to leave the session and drops back to the
+  // clean home. From home, the next press asks to exit the app. RN Modals
+  // (search, settings, results, etc.) consume back themselves via
+  // onRequestClose, so this only fires for the map/sheet/overlay layers.
+
+  // Fully exit the simulation overlay and return to the idle home map.
+  const handleLeaveSimulation = useCallback(() => {
+    resetSession();
+    setShowRunSheet(false);
+    setShowResultsModal(false);
+    setResultsDismissed(false);
+    setTrackingMode('follow');
+    const home = position || INDORE;
+    mapRef.current?.flyTo(home, 16, 0, 0, 600);
+  }, [resetSession, position]);
+
+  const confirmLeaveSimulation = useCallback(() => {
+    Alert.alert(
+      'Leave simulation?',
+      'Do you want to leave the simulation? The current run will be stopped.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Leave', style: 'destructive', onPress: handleLeaveSimulation },
+      ]
+    );
+  }, [handleLeaveSimulation]);
+
+  const confirmExitApp = useCallback(() => {
+    Alert.alert(
+      'Exit app?',
+      'Do you want to exit the app?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Exit', style: 'destructive', onPress: () => BackHandler.exitApp() },
+      ]
+    );
+  }, []);
+
+  const simulationActive = appState !== 'idle';
+
+  useEffect(() => {
+    const onBackPress = () => {
+      // 1. Dismiss the run-controls sheet (gorhom sheet doesn't own back).
+      if (showRunSheet && !isCalibrating && !isRunning) {
+        setShowRunSheet(false);
+        return true;
+      }
+      // 2. Exit turn-by-turn navigation before touching the app-level flow.
+      if (isNavigating) {
+        handleExitNavigation();
+        return true;
+      }
+      // 3. Active DR simulation → ask to leave, drop back to home.
+      if (simulationActive) {
+        confirmLeaveSimulation();
+        return true;
+      }
+      // 4. Home → ask to exit the app.
+      confirmExitApp();
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [
+    showRunSheet,
+    isCalibrating,
+    isRunning,
+    isNavigating,
+    simulationActive,
+    handleExitNavigation,
+    confirmLeaveSimulation,
+    confirmExitApp,
+  ]);
+
   // Dynamic distance and ETA
   const { navDistanceKm, navEtaMinutes } = useMemo(() => {
     if (routeData?.distanceKm != null && routeData?.durationMin != null) {
@@ -684,8 +807,8 @@ export default function MapScreen() {
     wasRunningRef.current = isRunning;
   }, [isRunning, replayMeta]);
 
-  // Results modal: open a beat after the run freezes so the recovery
-  // banner + "Tunnel Cleared" chip get their moment on camera
+  // Results modal: open a beat after the run freezes so the recovery banner +
+  // "GNSS Restored" signal banner get their moment on camera
   useEffect(() => {
     if (!isRunning && frozenResults && !showResultsModal && !resultsDismissed) {
       const t = setTimeout(() => setShowResultsModal(true), DR_DEMO.RESULTS_MODAL_DELAY_MS);
@@ -702,12 +825,14 @@ export default function MapScreen() {
   const handleCloseResults = useCallback(() => {
     setShowResultsModal(false);
     setResultsDismissed(true);
+    // Closing the dialog is the explicit "done reviewing" gesture: tear the
+    // session down so the BENCHMARKED RUN banner, NavCard, DR trail and gates
+    // all disappear with it and the app returns to the clean idle home.
+    resetSession();
     setTrackingMode('follow');
-    const target = isRunning && engineState.lat != null
-      ? { latitude: engineState.lat, longitude: engineState.lon }
-      : smoothPosition || position || INDORE;
+    const target = smoothPosition || position || INDORE;
     mapRef.current?.flyTo(target, 15, 0, 0, 600);
-  }, [isRunning, engineState, position]);
+  }, [resetSession, smoothPosition, position]);
 
   const handleReplaySession = useCallback(() => {
     setShowResultsModal(false);
@@ -716,16 +841,64 @@ export default function MapScreen() {
 
   const showEngineLayer = appState === 'running' || appState === 'completed';
 
+  // ── Top HUD stack: collision-free vertical layout ────────────────────────
+  // Which mid-DR instrument-cluster overlays are on screen right now. These
+  // three are the ones that used to collide (all near STATUS_BAR_HEIGHT + 66).
+  const showDriftCluster =
+    engineState.source === 'dr' && drSeconds >= DR_DEMO.DRIFT_CARD_AFTER_S;
+  const signalMode =
+    engineState.source === 'dr' ? 'degraded' : tunnelCleared ? 'restored' : null;
+  const showBenchmark = engineState.source !== 'dr' && !!benchmarkSnapshot;
+
+  // Graceful degradation: if the stack would grow past the room available above
+  // the NavCard, drop the least-critical rows (satellite + IMU chips) and keep
+  // the signal banner / drift meter / benchmark result, which carry the actual
+  // navigation + drift-safety information. Four rows fit comfortably; the fifth
+  // and sixth only appear in the densest DR moment.
+  const activeHudCount =
+    (signalMode ? 1 : 0) +
+    (showBenchmark ? 1 : 0) +
+    (showDriftCluster ? 3 : 0); // drift meter + sat chip + imu chip
+  const hudOverflow = activeHudCount > 4;
+  const showSatChip = showDriftCluster && !hudOverflow;
+  const showImuChip = showDriftCluster && !hudOverflow;
+
+  // Animate the push-down/re-flow whenever the set of visible rows changes.
+  const hudSignature = `${signalMode}|${showBenchmark ? 'b' : ''}|${
+    showDriftCluster ? (hudOverflow ? 'd' : 'dcs') : ''
+  }`;
+  const prevHudSignature = useRef(hudSignature);
+  useEffect(() => {
+    if (prevHudSignature.current !== hudSignature) {
+      LayoutAnimation.configureNext(
+        LayoutAnimation.create(
+          260,
+          LayoutAnimation.Types.easeInEaseOut,
+          LayoutAnimation.Properties.opacity
+        )
+      );
+      prevHudSignature.current = hudSignature;
+    }
+  }, [hudSignature]);
+
   // Bottom bar tab handler
   const handleBottomTabPress = useCallback((tabId) => {
     setActiveBottomTab(tabId);
     if (tabId === 'saves') {
       setShowSavedPlaces(true);
-    } else if (tabId === 'gadgets') {
-      setDebugVisible(true);
+    } else if (tabId === 'you') {
+      // "You" opens the same profile menu as the avatar button
+      setShowUserMenu(true);
+    } else if (tabId === 'explore') {
+      // Explore = back to the live map: close the detail card, follow the
+      // user, recenter the camera and refresh POIs for the current viewport.
+      setSelectedPlace(null);
+      setTrackingMode('follow');
+      const home = position || INDORE;
+      mapRef.current?.recenter(home, 16, 0, 0, 600);
+      runViewportFetch(selectedCategory || 'all', currentBounds);
     }
-    // 'explore' just stays on the map (default)
-  }, []);
+  }, [position, runViewportFetch, selectedCategory, currentBounds]);
 
   // Handle saving current location from QuickActionModal
   const handleSaveCurrentLocation = useCallback(async () => {
@@ -925,12 +1098,12 @@ export default function MapScreen() {
           />
 
           <SearchThisAreaButton
-            visible={showSearchAreaBtn && !placesError}
+            visible={showSearchAreaBtn && !placesError && !showEngineLayer}
             onPress={handleSearchThisArea}
             loading={isSearchingPlaces}
           />
 
-          {placesError && !isSearchingPlaces && (
+          {placesError && !isSearchingPlaces && !showEngineLayer && (
             <TouchableOpacity style={styles.retryChip} onPress={handleRetryPlaces}>
               <Text style={styles.retryChipText}>⚠️ Couldn't load places — Retry</Text>
             </TouchableOpacity>
@@ -971,7 +1144,8 @@ export default function MapScreen() {
       {/* Layer 2: Demo run HUD (status pill, sensor chips, banners, nav card) */}
       {showEngineLayer && (
         <>
-          {/* Row 1: status pill top-right, satellites inline while GNSS is marginal */}
+          {/* Row 0 (top-right rail): status pill + marginal-GNSS sat chip. These
+              sit beside the search pill and never enter the centred stack. */}
           <View onTouchEnd={handleBadgeTap}>
             <StatusBadge source={engineState.source} drSeconds={drSeconds} />
           </View>
@@ -982,35 +1156,34 @@ export default function MapScreen() {
             visible={engineState.source === 'dr' && drSeconds < DR_DEMO.DRIFT_CARD_AFTER_S}
           />
 
-          {/* GNSS signal-state banner: degraded while in DR, restored on recovery */}
-          <SignalBanner
-            mode={engineState.source === 'dr' ? 'degraded' : tunnelCleared ? 'restored' : null}
-          />
+          {/* Centred HUD stack: every active overlay gets its own row, so they
+              reflow downward instead of overlapping. Render order = priority. */}
+          <View pointerEvents="box-none" style={styles.hudStack}>
+            {/* GNSS signal-state banner: degraded while in DR, restored on recovery */}
+            <SignalBanner mode={signalMode} containerStyle={STACK_ITEM} />
 
-          {/* Row 2: mid-DR instrument cluster */}
-          <SatChip
-            sats={gnssQuality.sats}
-            hdop={gnssQuality.hdop}
-            row={2}
-            visible={engineState.source === 'dr' && drSeconds >= DR_DEMO.DRIFT_CARD_AFTER_S}
-          />
-          <DriftMeter
-            driftStats={driftStats}
-            visible={engineState.source === 'dr' && drSeconds >= DR_DEMO.DRIFT_CARD_AFTER_S}
-          />
-          <ImuOdoChip
-            speed={engineState.speed}
-            visible={engineState.source === 'dr' && drSeconds >= DR_DEMO.DRIFT_CARD_AFTER_S}
-          />
+            {/* Recovery: frozen benchmark banner (full-width row) */}
+            <BenchmarkBanner
+              snapshot={benchmarkSnapshot}
+              visible={showBenchmark}
+              containerStyle={STACK_ITEM_STRETCH}
+            />
 
-          {/* Recovery: frozen benchmark banner */}
-          <BenchmarkBanner
-            snapshot={benchmarkSnapshot}
-            visible={engineState.source !== 'dr' && !!benchmarkSnapshot}
-          />
-
-          {/* Tunnel banner + cleared chip */}
-          <TunnelBanner visible={engineState.source === 'dr'} cleared={tunnelCleared} />
+            {/* Mid-DR instrument cluster */}
+            <DriftMeter driftStats={driftStats} visible={showDriftCluster} containerStyle={STACK_ITEM} />
+            <SatChip
+              sats={gnssQuality.sats}
+              hdop={gnssQuality.hdop}
+              row={2}
+              visible={showSatChip}
+              containerStyle={STACK_ITEM}
+            />
+            <ImuOdoChip
+              speed={engineState.speed}
+              visible={showImuChip}
+              containerStyle={STACK_ITEM}
+            />
+          </View>
 
           {/* Bottom nav card */}
           <NavCard navInfo={navInfo} onStop={stopRun} visible={!showResultsModal} />
@@ -1029,7 +1202,10 @@ export default function MapScreen() {
       {/* User Profile & Settings Menu Modal */}
       <UserMenuModal
         visible={showUserMenu}
-        onClose={() => setShowUserMenu(false)}
+        onClose={() => {
+          setShowUserMenu(false);
+          setActiveBottomTab('explore');
+        }}
         onCheckUpdates={handleManualCheckUpdates}
         onOpenDiagnostics={() => setDebugVisible(true)}
         onOpenOfflineMaps={() => setShowOfflineMaps(true)}
@@ -1165,6 +1341,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+  },
+  hudStack: {
+    position: 'absolute',
+    top: HUD_STACK_TOP,
+    left: 8,
+    right: 8,
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 19, // below the top-right status rail (20) and modals
+    pointerEvents: 'box-none', // let the map receive touches between chips
   },
   clearRouteBtn: {
     position: 'absolute',

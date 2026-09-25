@@ -70,7 +70,7 @@ export function getAvailableReplays() {
   return [
     {
       name: 'sample_drive_SYNTHETIC.csv',
-      description: '100s Indore drive · 60s tunnel blackout (synthetic)',
+      description: '~119s Indore real-road drive · 40s satellite cutoff (synthetic)',
       module: require('../../assets/replay/sample_drive_SYNTHETIC.csv'),
     },
   ];
@@ -90,7 +90,7 @@ const DEMO_MANEUVERS = [
     icon: '↰',
     stepM: 200,
     instruction: 'Keep left',
-    toward: 'Towards Vijay Nagar Square • AB Rd Tunnel',
+    toward: 'Towards Vijay Nagar Square • AB Rd',
   },
   {
     atS: 80,
