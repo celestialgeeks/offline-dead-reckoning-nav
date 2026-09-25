@@ -8,6 +8,21 @@ Release binaries (signed Android APKs) are distributed via
 [GitHub Releases](https://github.com/celestialgeeks/ps168-releases/releases) and
 installed in-app through the built-in OTA updater.
 
+## [1.0.13] - 2026-09-25
+
+### Fixed
+- **Search no longer resets while typing** — the results modal's init effect was re-firing on every GPS fix (position object identity), wiping the query mid-search. Superseded queries now abort cleanly instead of surfacing stale local results, and Nominatim's hard `bounded=1` clip was removed.
+- **Navigation crash** — starting or exiting turn-by-turn navigation threw a `Render Error` (`removeListeners` typo in the `Animated` listener cleanup of the route layer and nav card).
+- **Run controls sheet** opens fully expanded (START visible immediately) instead of a 12% peek that required dragging.
+- **Closing the benchmark results dialog** now tears the session down completely — the BENCHMARKED RUN banner, nav card, DR trail and signal gates no longer linger on the idle map.
+- **Zoom controls** render above the bottom bar and HUD overlays in all states (idle / running / navigating).
+- **Bottom bar**: the "You" tab opens the profile menu, and "Explore" recenters, follows and refreshes viewport places (both were previously dead).
+- **HUD stack crash** — `zIndex: 'auto'` (a string) is rejected by the New Architecture's native prop casting; replaced with a numeric value.
+
+### Changed
+- DR demo reframed around **satellite cutoff → automatic dead-reckoning**: all tunnel terminology removed, and the replay now follows real Indore roads (1185 rows, 40 s synthetic cutoff) instead of a straight line.
+- No category chip is pre-selected on launch — places load as "all" until the user taps a filter.
+
 ## [1.0.12] - 2026-09-24
 
 ### Added
